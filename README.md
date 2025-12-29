@@ -59,6 +59,12 @@ This software is designed as a supplementary monitoring tool and **is not a repl
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## 🎓 Acknowledgments
+
+**Dedicated to [CodeWithHarry](https://www.codewithharry.com/)** 
+
+I am a proud student of the CodeWithHarry community. This project was built using concepts and inspiration gained from his amazing tutorials. Thank you, Harry Bhai, for being an incredible mentor and making programming accessible to everyone! 
+
 ## Support
 
 If you find this project useful, you can support its development:
