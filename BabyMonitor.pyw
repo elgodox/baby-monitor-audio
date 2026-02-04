@@ -13,9 +13,12 @@ import webbrowser
 from datetime import datetime
 from flask import Flask, Response, render_template_string, request
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 import sys
 import os
+import sounddevice as sd
+import numpy as np
+import queue
 
 # QR Code imports
 try:
@@ -32,6 +35,11 @@ server_running = False
 first_frame = None
 frame_count = 0
 SERVER_PORT = 5000
+
+# Audio variables
+audio_queue = queue.Queue()
+audio_thread = None
+audio_stream = None
 
 MOTION_CONFIG = {
     'min_area': 3000,
@@ -228,9 +236,85 @@ PAGE_HTML = """
         </div>
         <div class="status-bar">
             <div class="status-item"><div class="pulse"></div><span>Live</span></div>
+            <div class="status-item" id="audioStatus"><span>🎤</span><span>Audio</span></div>
             <div class="status-item"><span>📡</span><span>Connected</span></div>
             <div class="status-item secure-badge">🔐 Protected</div>
         </div>
+        
+        <!-- Hidden audio element for streaming -->
+        <audio id="audioStream" autoplay style="display: none;"></audio>
+        
+        <script>
+            // Function to start audio streaming
+            function startAudioStream() {
+                const audioStatus = document.getElementById('audioStatus');
+                
+                // Create a new AudioContext for Web Audio API
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Fetch audio stream
+                fetch('/audio/{{ token }}')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Audio stream not available');
+                        }
+                        return response.body;
+                    })
+                    .then(stream => {
+                        // Create a MediaStream from the response
+                        const reader = stream.getReader();
+                        
+                        function readStream() {
+                            reader.read().then(({ done, value }) => {
+                                if (done) return;
+                                
+                                if (value && value.length > 44) { // Ensure we have WAV header + data
+                                    try {
+                                        // Skip WAV header (44 bytes) and convert the raw audio data
+                                        const audioData = new Int16Array(value.buffer.slice(44));
+                                        const floatData = new Float32Array(audioData.length);
+                                        
+                                        for (let i = 0; i < audioData.length; i++) {
+                                            floatData[i] = audioData[i] / 32768.0; // Convert to float
+                                        }
+                                        
+                                        // Create audio buffer
+                                        const buffer = audioContext.createBuffer(1, floatData.length, 44100);
+                                        buffer.copyFromChannel(floatData, 0);
+                                        
+                                        // Create audio source and play
+                                        const source = audioContext.createBufferSource();
+                                        source.buffer = buffer;
+                                        source.connect(audioContext.destination);
+                                        source.start();
+                                        
+                                        // Update status to show audio is working
+                                        audioStatus.innerHTML = '<span>🎤</span><span>Audio Active</span>';
+                                        audioStatus.style.background = 'rgba(34, 197, 94, 0.2)';
+                                    } catch (e) {
+                                        console.log('Error processing audio data:', e);
+                                    }
+                                }
+                                
+                                readStream(); // Continue reading
+                            }).catch(error => {
+                                console.log('Error reading audio stream:', error);
+                            });
+                        }
+                        
+                        readStream();
+                    })
+                    .catch(error => {
+                        console.log('Audio streaming not available:', error);
+                        // Update status to show audio is not available
+                        audioStatus.innerHTML = '<span>🔇</span><span>No Audio</span>';
+                        audioStatus.style.background = 'rgba(239, 68, 68, 0.2)';
+                    });
+            }
+            
+            // Start audio when page loads
+            window.addEventListener('load', startAudioStream);
+        </script>
     </div>
     <div class="footer">{{ timestamp }}</div>
 </body>
@@ -301,11 +385,122 @@ def video_feed_path(token):
         return "Unauthorized", 403
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+@app.route('/audio_feed')
+def audio_feed():
+    if not check_auth():
+        return "Unauthorized", 403
+    return Response(generate_audio(), mimetype='audio/wav')
+
+@app.route('/audio/<token>')
+def audio_feed_path(token):
+    if not check_auth(token):
+        return "Unauthorized", 403
+    return Response(generate_audio(), mimetype='audio/wav')
+
 def run_flask():
     import logging
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
     app.run(host='0.0.0.0', port=SERVER_PORT, debug=False, threaded=True, use_reloader=False)
+
+def detect_cameras(max_cameras=10):
+    """Detect all available cameras"""
+    available_cameras = []
+    for i in range(max_cameras):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            ret, _ = cap.read()
+            if ret:
+                # Try to get camera name/description
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                camera_info = f"Camera {i} ({width}x{height})"
+                available_cameras.append((i, camera_info))
+            cap.release()
+        else:
+            break
+    return available_cameras
+
+def audio_callback(indata, frames, time_info, status):
+    """Callback function for audio capture"""
+    if status:
+        print(f"Audio status: {status}")
+    # Convert to bytes directly
+    audio_queue.put(indata.tobytes())
+
+def start_audio_capture():
+    """Start audio capture thread"""
+    global audio_stream, audio_thread
+    
+    try:
+        # Try sounddevice first
+        audio_stream = sd.InputStream(
+            channels=1,
+            samplerate=44100,
+            dtype='int16',
+            callback=audio_callback,
+            blocksize=2048
+        )
+        audio_stream.start()
+        print("Audio capture started with sounddevice")
+    except Exception as e:
+        print(f"Sounddevice audio capture failed: {e}")
+        try:
+            # Fallback: try with different settings
+            audio_stream = sd.InputStream(
+                channels=1,
+                samplerate=22050,
+                dtype='float32',
+                callback=audio_callback,
+                blocksize=1024
+            )
+            audio_stream.start()
+            print("Audio capture started with sounddevice (fallback)")
+        except Exception as e2:
+            print(f"Audio capture not available: {e2}")
+            print("Continuing without audio - video only mode")
+            audio_stream = None
+
+def stop_audio_capture():
+    """Stop audio capture"""
+    global audio_stream
+    if audio_stream:
+        audio_stream.stop()
+        audio_stream.close()
+        audio_stream = None
+        print("Audio capture stopped")
+
+def generate_audio():
+    """Generate audio stream for Flask"""
+    while server_running:
+        try:
+            audio_data = audio_queue.get(timeout=1.0)
+            # For raw PCM data, we need to add WAV header
+            # Simple WAV header for 16-bit mono audio
+            if len(audio_data) > 0:
+                # Create minimal WAV header
+                sample_rate = 44100
+                channels = 1
+                bits_per_sample = 16
+                data_size = len(audio_data)
+                
+                header = b'RIFF'
+                header += (36 + data_size).to_bytes(4, 'little')
+                header += b'WAVE'
+                header += b'fmt '
+                header += (16).to_bytes(4, 'little')  # Subchunk1Size
+                header += (1).to_bytes(2, 'little')   # AudioFormat (PCM)
+                header += channels.to_bytes(2, 'little')
+                header += sample_rate.to_bytes(4, 'little')
+                header += (sample_rate * channels * bits_per_sample // 8).to_bytes(4, 'little')  # ByteRate
+                header += (channels * bits_per_sample // 8).to_bytes(2, 'little')  # BlockAlign
+                header += bits_per_sample.to_bytes(2, 'little')
+                header += b'data'
+                header += data_size.to_bytes(4, 'little')
+                
+                yield header + audio_data
+        except queue.Empty:
+            continue
 
 
 class BabyMonitorApp:
@@ -329,6 +524,8 @@ class BabyMonitorApp:
         self.local_ip = get_local_ip()
         self.token = None
         self.full_url = None
+        self.selected_camera = 0
+        self.available_cameras = detect_cameras()
         
         self.center_window()
         self.create_modern_ui()
@@ -370,6 +567,58 @@ class BabyMonitorApp:
                                      font=('Segoe UI', 12, 'bold'),
                                      fg='#f85149', bg='#161b22')
         self.status_label.pack(side='left')
+        
+        # Camera selection card
+        camera_card = tk.Frame(main, bg='#21262d', pady=12, padx=15)
+        camera_card.pack(fill='x', pady=(0, 8))
+        
+        camera_header = tk.Frame(camera_card, bg='#21262d')
+        camera_header.pack(fill='x')
+        
+        tk.Label(camera_header, text="📹 Camera Selection", font=('Segoe UI', 10, 'bold'),
+                fg='#58a6ff', bg='#21262d').pack(side='left')
+        
+        num_cameras = len(self.available_cameras)
+        if num_cameras > 0:
+            camera_count_text = f"({num_cameras} detected)"
+            camera_count_color = '#3fb950' if num_cameras > 1 else '#8b949e'
+        else:
+            camera_count_text = "(None found)"
+            camera_count_color = '#f85149'
+        
+        tk.Label(camera_header, text=camera_count_text, 
+                font=('Segoe UI', 8), fg=camera_count_color, bg='#21262d').pack(side='left', padx=(6, 0))
+        
+        if num_cameras > 0:
+            tk.Label(camera_card, text="Choose which camera to use", 
+                    font=('Segoe UI', 8), fg='#6e7681', bg='#21262d').pack(anchor='w', pady=(4, 8))
+            
+            camera_options = [info for idx, info in self.available_cameras]
+            
+            style = ttk.Style()
+            style.theme_use('clam')
+            style.configure('Camera.TCombobox',
+                          fieldbackground='#0d1117',
+                          background='#21262d',
+                          foreground='#58a6ff',
+                          arrowcolor='#58a6ff',
+                          borderwidth=0,
+                          relief='flat')
+            style.map('Camera.TCombobox',
+                     fieldbackground=[('readonly', '#0d1117')],
+                     selectbackground=[('readonly', '#1f6feb')],
+                     selectforeground=[('readonly', 'white')])
+            
+            self.camera_combo = ttk.Combobox(camera_card, values=camera_options,
+                                            state='readonly', font=('Segoe UI', 10),
+                                            style='Camera.TCombobox')
+            self.camera_combo.set(camera_options[0])
+            self.camera_combo.pack(fill='x', ipady=4)
+            self.camera_combo.bind('<<ComboboxSelected>>', self.on_camera_select)
+        else:
+            tk.Label(camera_card, text="⚠️ No cameras detected\nPlease connect a webcam", 
+                    font=('Segoe UI', 9), fg='#f85149', bg='#21262d',
+                    justify='center').pack(pady=8)
         
         ip_card = tk.Frame(main, bg='#21262d', pady=12, padx=15)
         ip_card.pack(fill='x', pady=(0, 8))
@@ -568,18 +817,24 @@ class BabyMonitorApp:
         
         first_frame = None
         
-        camera = cv2.VideoCapture(0)
+        camera = cv2.VideoCapture(self.selected_camera)
         camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         camera.set(cv2.CAP_PROP_FPS, 15)
         
         if not camera.isOpened():
             messagebox.showerror("Camera Error", 
-                "Cannot access webcam!\n\nCheck:\n• Webcam connected\n• Not used by another app")
+                f"Cannot access camera {self.selected_camera}!\n\nCheck:\n• Webcam connected\n• Not used by another app\n• Try selecting a different camera")
             return
         
         server_running = True
         threading.Thread(target=run_flask, daemon=True).start()
+        
+        # Start audio capture
+        try:
+            start_audio_capture()
+        except Exception as e:
+            print(f"Warning: Audio capture failed: {e}")
         
         self.is_running = True
         
@@ -612,6 +867,9 @@ class BabyMonitorApp:
             camera.release()
             camera = None
         
+        # Stop audio capture
+        stop_audio_capture()
+        
         self.status_dot.itemconfig(self.dot_id, fill='#f85149')
         self.status_label.config(text="Server Offline", fg='#f85149')
         
@@ -628,6 +886,11 @@ class BabyMonitorApp:
         self.qr_pil_image = None
         
         messagebox.showinfo("Stopped", "Baby Monitor stopped.\nCamera released.")
+    
+    def on_camera_select(self, event=None):
+        """Handle camera selection change"""
+        selected_idx = self.camera_combo.current()
+        self.selected_camera = self.available_cameras[selected_idx][0]
     
     def copy_url(self):
         if self.full_url:
