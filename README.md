@@ -1,35 +1,39 @@
-# 👶 Baby Monitor with Audio Support
+# 👶 Baby Monitor with Audio & Multi-Camera Support
 
-Turn your computer's webcam into a secure baby monitor with **optional audio streaming**. This application streams live video (and audio if available) to any device on your local WiFi network (phones, tablets, laptops) without sending data to the cloud.
+**Enhanced Fork** - Turn your computer's webcam into a secure baby monitor with **real-time audio streaming** and **automatic multi-camera detection**. This application streams live video AND audio to any device on your local WiFi network (phones, tablets, laptops) without sending data to the cloud.
 
-**🎤 Audio is OPTIONAL but RECOMMENDED to hear your baby!**
+**🎤 Audio + 📹 Multi-Camera = Complete Baby Monitoring Solution!**
 
 ![Baby Monitor Interface](baby_face.ico)
 
 ## Features
 
 - **Local & Secure**: Streams video directly over your home WiFi. No internet or cloud servers involved.
-- **Audio Streaming (Optional)**: Captures and streams audio from your microphone using sounddevice - great for hearing your baby!
-- **Multiple Cameras**: Automatically detects all connected cameras and lets you choose which one to use.
-- **Works on Any Device**: Watch the stream in any web browser on iOS, Android, or PC.
-- **Motion Detection**: Visual alerts when movement is detected in the frame.
-- **Dark Mode**: Interface designed to be easy on the eyes in dark rooms.
-- **Easy Connection**: Scan a QR code to connect your phone instantly.
-- **Private**: Uses unique session tokens to ensure only you can access the feed.
+- **🎤 Real-Time Audio Streaming**: Captures and streams audio from your microphone using sounddevice - hear your baby clearly!
+- **📹 Multi-Camera Detection**: Automatically detects all connected cameras and lets you choose which one to use.
+- **🔄 Dynamic Device Selection**: Switch between cameras and audio devices without restarting.
+- **📱 Works on Any Device**: Watch the stream in any web browser on iOS, Android, or PC.
+- **🚨 Motion Detection**: Visual alerts when movement is detected in the frame.
+- **🌙 Dark Mode UI**: Interface designed to be easy on the eyes in dark rooms.
+- **📲 Easy Connection**: Scan a QR code to connect your phone instantly.
+- **🔐 Private & Secure**: Uses unique session tokens to ensure only you can access the feed.
+- **⚡ Graceful Fallbacks**: Works perfectly even if audio or certain cameras aren't available.
 
 ## Prerequisites
 
 - Python 3.6 or higher
 - A webcam connected to your computer
-- **Optional: A microphone or audio input device** - Recommended for hearing your baby
+- **Recommended: A microphone or audio input device** - For complete baby monitoring experience
 - A local WiFi network (both computer and viewing device must be on the same network)
+
+**Note**: Audio is now a core feature, but the app works perfectly with video-only if no microphone is available.
 
 ## Installation
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/Recentlystarted/baby-monitor.git
-    cd baby-monitor
+    git clone https://github.com/elgodox/baby-monitor-audio.git
+    cd baby-monitor-audio
     ```
 
 2.  **Install dependencies**:
@@ -42,13 +46,34 @@ Turn your computer's webcam into a secure baby monitor with **optional audio str
     pip install -r requirements.txt
     ```
 
-## Audio Setup
+## 🚀 New Features in This Fork
 
-The app uses `sounddevice` for audio capture, which is more reliable than PyAudio. If audio doesn't work:
+This fork enhances the original Baby Monitor with the following improvements:
 
-- **Check your microphone permissions** in Windows/Mac settings
-- **Try different audio devices** if you have multiple microphones
-- **The app will work without audio** - you'll see "🔇 No Audio" in the status bar
+### 🎤 Audio Streaming
+- **Real-time audio capture** using `sounddevice` library (modern alternative to PyAudio)
+- **Web Audio API integration** for streaming audio to web browsers
+- **Optional audio** - works perfectly even without microphone
+- **Visual audio status** indicators in the web interface
+- **Graceful fallback** when audio is not available
+
+### 📹 Multi-Camera Support
+- **Automatic camera detection** - finds all connected cameras
+- **Camera selection interface** - choose which camera to use
+- **Resolution display** - shows camera capabilities (e.g., "Camera 0 (640x480)")
+- **Dynamic camera switching** - change cameras without restarting
+
+### 🔧 Technical Improvements
+- **Updated dependencies** with `requirements.txt`
+- **Better error handling** for audio/camera issues
+- **Cleaner code structure** and documentation
+- **Cross-platform compatibility** improvements
+
+### 📱 Enhanced User Experience
+- **Modern UI indicators** for audio status
+- **Comprehensive device detection**
+- **Robust connection handling**
+- **Better user feedback** and error messages
       2. Direct `pip install pyaudio`
       3. Download appropriate wheel file from [Unofficial Windows Binaries](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio) and install:
          ```bash
@@ -88,11 +113,17 @@ The app uses `sounddevice` for audio capture, which is more reliable than PyAudi
     ```
 
 3.  **Select your devices**:
-    - Choose which camera to use
-    - Choose which microphone to use (REQUIRED)
+    - Choose which camera to use from the dropdown menu
+    - The app will automatically detect available cameras and microphones
+    - Audio streaming starts automatically when available
 
 4.  **Start Monitoring**:
     Click the **▶ START** button in the application.
+
+5.  **Monitor the Status**:
+    - **🟢 Green indicators** show active video and audio streaming
+    - **🔴 Red indicators** show when devices aren't available
+    - **📊 Status bar** shows connection and device information
 
 5.  **Connect a Device**:
     - **Option A (Easiest)**: Scan the QR code displayed in the app with your phone's camera.
@@ -128,14 +159,24 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🎓 Acknowledgments
 
-**Dedicated to [CodeWithHarry](https://www.codewithharry.com/)** 
+**Forked from [Recentlystarted/baby-monitor](https://github.com/Recentlystarted/baby-monitor)**
 
-I am a proud student of the CodeWithHarry community. This project was built using concepts and inspiration gained from his amazing tutorials. Thank you, Harry Bhai, for being an incredible mentor and making programming accessible to everyone! 
+This project is a fork of the original Baby Monitor by Recentlystarted, enhanced with audio streaming and multi-camera support.
+
+**Original project dedicated to [CodeWithHarry](https://www.codewithharry.com/)**
+
+The original project was built using concepts and inspiration gained from CodeWithHarry's amazing tutorials. Thank you for making programming accessible to everyone!
+
+**Audio enhancements by elgodox**
+
+Added audio streaming capabilities using sounddevice library and multi-camera detection for enhanced baby monitoring experience. 
 
 ## Support
 
-If you find this project useful, you can support its development:
+If you find this project useful, you can support its development by starring ⭐ this repository!
 
+**Original project support:**
 <a href="https://buymeacoffee.com/3lineofcodd" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
-Or simply star ⭐ this repository to show your support!
+**Fork enhancements:**
+This fork adds audio streaming and multi-camera support. Feel free to contribute improvements!
